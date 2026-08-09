@@ -287,19 +287,13 @@ function skipCalibration() { state.calibration.active = false; state.calibration
 function isZapDetected() {
     if (!state.audio.analyser || !state.calibration.profile || !state.game.micActive) return false;
     const data = getAudioData(); if (!data) return false;
-    const profile = state.calibration.profile, bins = 32, step = Math.floor(data.length / bins);
-    let matchScore = 0, totalWeight = 0, currentMax = 0;
-    for (let i = 0; i < bins; i++) {
-        const val = data[i * step], expected = profile.fingerprint[i], weight = expected / profile.max;
-        totalWeight += weight; matchScore += (1 - Math.abs(val - expected) / 255) * weight;
-        if (val > currentMax) currentMax = val;
-    }
-    const normalizedScore = totalWeight > 0 ? matchScore / totalWeight : 0, sensitivityMultiplier = state.settings.sensitivity / 5, threshold = 0.35 / sensitivityMultiplier;
-    const rawProfile = analyzeAudio(data), amplitudeThreshold = 25 + (10 - state.settings.sensitivity) * 2, amplitudeMatch = rawProfile.max > amplitudeThreshold && rawProfile.avg > 8;
-    const loud = (normalizedScore > threshold || amplitudeMatch) && currentMax > 20;
+    const rawProfile = analyzeAudio(data);
+    // same simple loudness check calibration uses, so a zap that registers during calibration also registers in-game
+    const loud = detectZapLike(data, rawProfile);
+    const zapThreshold = 30 + (10 - state.settings.sensitivity) * 3;
     // hysteresis: only reset "ready" once the sound drops well below the trigger level, so
     // lingering ambient noise can't permanently block detection, but sustained noise can't re-trigger either
-    const quiet = rawProfile.max < amplitudeThreshold * 0.5 && currentMax < 10;
+    const quiet = rawProfile.max < zapThreshold * 0.5 && rawProfile.avg < 5;
     const isOnset = loud && state.game.wasQuiet;
     if (quiet) state.game.wasQuiet = true; else if (loud) state.game.wasQuiet = false;
     const now = Date.now();
