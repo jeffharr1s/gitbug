@@ -6,8 +6,8 @@ const state = {
     player: '',
     screen: 'login',
     leaderboard: [],
-    calibration: { active: false, capturing: false, samples: [], profile: null, captureStart: 0 },
-    game: { active: false, mode: 'free', score: 0, bugs: 0, combo: 0, maxCombo: 0, lives: 3, startTime: null, endTime: null, lastZapTime: 0, comboTimer: null, timerInterval: null, bugTypes: {}, zaps: [], misses: 0, micActive: true, voiceListening: false },
+    calibration: { active: false, capturing: false, samples: [], profile: null, captureStart: 0, lastSampleTime: 0, wasQuiet: true },
+    game: { active: false, mode: 'free', score: 0, bugs: 0, combo: 0, maxCombo: 0, lives: 3, startTime: null, endTime: null, lastZapTime: 0, comboTimer: null, timerInterval: null, bugTypes: {}, zaps: [], misses: 0, micActive: true, voiceListening: false, wasQuiet: true },
     settings: { sensitivity: 5, sfx: true, haptic: true, voice: true, animIntensity: 'medium' },
     audio: { context: null, analyser: null, microphone: null, dataArray: null, bufferLength: 0, source: null, vizCanvas: null, vizCtx: null, calCanvas: null, calCtx: null },
     recognition: null,
@@ -202,6 +202,8 @@ function resetCalibrationUI() {
     state.calibration.active = false;
     state.calibration.capturing = false;
     state.calibration.samples = [];
+    state.calibration.lastSampleTime = 0;
+    state.calibration.wasQuiet = true;
     document.getElementById('cal-start-btn').classList.remove('hidden');
     document.getElementById('cal-done-btn').classList.add('hidden');
     document.getElementById('cal-reset-btn').classList.add('hidden');
@@ -219,6 +221,8 @@ async function startCalibration() {
     state.calibration.active = true;
     state.calibration.samples = [];
     state.calibration.capturing = true;
+    state.calibration.lastSampleTime = 0;
+    state.calibration.wasQuiet = true;
     document.getElementById('cal-start-btn').classList.add('hidden');
     document.getElementById('cal-done-btn').classList.remove('hidden');
     document.getElementById('cal-reset-btn').classList.remove('hidden');
@@ -234,7 +238,12 @@ function calibrateLoop() {
     if (!data) { requestAnimationFrame(calibrateLoop); return; }
     const profile = analyzeAudio(data);
     const isZap = detectZapLike(data, profile);
-    if (isZap && state.calibration.samples.length < CALIBRATION_SAMPLES) {
+    const sinceLastSample = Date.now() - state.calibration.lastSampleTime;
+    // only count a fresh sound (quiet -> loud), so sustained noise can't fill all 5 slots instantly
+    const isOnset = isZap && state.calibration.wasQuiet;
+    state.calibration.wasQuiet = !isZap;
+    if (isOnset && sinceLastSample > SAMPLE_DURATION && state.calibration.samples.length < CALIBRATION_SAMPLES) {
+        state.calibration.lastSampleTime = Date.now();
         const sample = captureSample(data);
         state.calibration.samples.push(sample);
         const slot = document.querySelector(`.sample-slot[data-index="${state.calibration.samples.length - 1}"]`);
@@ -275,7 +284,6 @@ function skipCalibration() { state.calibration.active = false; state.calibration
 function isZapDetected() {
     if (!state.audio.analyser || !state.calibration.profile || !state.game.micActive) return false;
     const data = getAudioData(); if (!data) return false;
-    const now = Date.now(); if (now - state.game.lastZapTime < ZAP_DEBOUNCE) return false;
     const profile = state.calibration.profile, bins = 32, step = Math.floor(data.length / bins);
     let matchScore = 0, totalWeight = 0, currentMax = 0;
     for (let i = 0; i < bins; i++) {
@@ -285,13 +293,18 @@ function isZapDetected() {
     }
     const normalizedScore = totalWeight > 0 ? matchScore / totalWeight : 0, sensitivityMultiplier = state.settings.sensitivity / 5, threshold = 0.35 / sensitivityMultiplier;
     const rawProfile = analyzeAudio(data), amplitudeThreshold = 25 + (10 - state.settings.sensitivity) * 2, amplitudeMatch = rawProfile.max > amplitudeThreshold && rawProfile.avg > 8;
-    return (normalizedScore > threshold || amplitudeMatch) && currentMax > 20;
+    const loud = (normalizedScore > threshold || amplitudeMatch) && currentMax > 20;
+    // only count a fresh sound (quiet -> loud), so sustained/background noise can't chain-trigger zaps
+    const isOnset = loud && state.game.wasQuiet;
+    state.game.wasQuiet = !loud;
+    const now = Date.now();
+    return isOnset && now - state.game.lastZapTime >= ZAP_DEBOUNCE;
 }
 
 // ===== GAME =====
 async function startGame(mode) {
     await initAudio();
-    state.game = { active: true, mode: mode, score: 0, bugs: 0, combo: 0, maxCombo: 0, lives: mode === 'endurance' ? 3 : 99, startTime: Date.now(), endTime: null, lastZapTime: 0, comboTimer: null, timerInterval: null, bugTypes: {}, zaps: [], misses: 0, micActive: true, voiceListening: false };
+    state.game = { active: true, mode: mode, score: 0, bugs: 0, combo: 0, maxCombo: 0, lives: mode === 'endurance' ? 3 : 99, startTime: Date.now(), endTime: null, lastZapTime: 0, comboTimer: null, timerInterval: null, bugTypes: {}, zaps: [], misses: 0, micActive: true, voiceListening: false, wasQuiet: true };
     showScreen('game');
     updateHUD();
     document.getElementById('mode-badge').textContent = mode.toUpperCase().replace('-', ' ');
