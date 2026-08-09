@@ -239,9 +239,12 @@ function calibrateLoop() {
     const profile = analyzeAudio(data);
     const isZap = detectZapLike(data, profile);
     const sinceLastSample = Date.now() - state.calibration.lastSampleTime;
-    // only count a fresh sound (quiet -> loud), so sustained noise can't fill all 5 slots instantly
+    // hysteresis: only reset "ready" once the sound drops well below the trigger level, so
+    // lingering ambient noise can't permanently block the next sample, but sustained noise can't refill instantly
+    const zapThreshold = 30 + (10 - state.settings.sensitivity) * 3;
+    const isQuiet = profile.max < zapThreshold * 0.5 && profile.avg < 5;
     const isOnset = isZap && state.calibration.wasQuiet;
-    state.calibration.wasQuiet = !isZap;
+    if (isQuiet) state.calibration.wasQuiet = true; else if (isZap) state.calibration.wasQuiet = false;
     if (isOnset && sinceLastSample > SAMPLE_DURATION && state.calibration.samples.length < CALIBRATION_SAMPLES) {
         state.calibration.lastSampleTime = Date.now();
         const sample = captureSample(data);
@@ -294,9 +297,11 @@ function isZapDetected() {
     const normalizedScore = totalWeight > 0 ? matchScore / totalWeight : 0, sensitivityMultiplier = state.settings.sensitivity / 5, threshold = 0.35 / sensitivityMultiplier;
     const rawProfile = analyzeAudio(data), amplitudeThreshold = 25 + (10 - state.settings.sensitivity) * 2, amplitudeMatch = rawProfile.max > amplitudeThreshold && rawProfile.avg > 8;
     const loud = (normalizedScore > threshold || amplitudeMatch) && currentMax > 20;
-    // only count a fresh sound (quiet -> loud), so sustained/background noise can't chain-trigger zaps
+    // hysteresis: only reset "ready" once the sound drops well below the trigger level, so
+    // lingering ambient noise can't permanently block detection, but sustained noise can't re-trigger either
+    const quiet = rawProfile.max < amplitudeThreshold * 0.5 && currentMax < 10;
     const isOnset = loud && state.game.wasQuiet;
-    state.game.wasQuiet = !loud;
+    if (quiet) state.game.wasQuiet = true; else if (loud) state.game.wasQuiet = false;
     const now = Date.now();
     return isOnset && now - state.game.lastZapTime >= ZAP_DEBOUNCE;
 }
