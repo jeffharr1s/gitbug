@@ -1,0 +1,27 @@
+.lb-rank.bronze { color: #cd7f32; }
+.lb-info { flex: 1; }
+.lb-name { font-weight: 700; font-size: 0.95rem; color: #fff; }
+.lb-details { font-size: 0.7rem; color: #666; }
+.lb-score { font-family: 'Bangers', cursive; font-size: 1.3rem; color: #ff0055; }
+
+/* ===== SETTINGS ===== */
+#settings-screen { background: #0a0a0a; padding: 1rem; }
+.settings-header { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; margin-bottom: 1rem; }
+.settings-header h2 { font-family: 'Bangers', cursive; font-size: 1.5rem; color: #00ffaa; }
+.settings-list { display: flex; flex-direction: column; gap: 1rem; flex: 1; overflow-y: auto; }
+.setting-item { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 1rem; }
+.setting-item label { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #aaa; letter-spacing: 0.05em; }
+.setting-item input[type="range"] { width: 120px; accent-color: #ff0055; }
+.setting-item select { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 0.4rem 0.75rem; font-family: 'Rajdhani', sans-serif; font-size: 0.85rem; }
+.toggle { padding: 0.4rem 1rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; color: #666; font-family: 'Orbitron', sans-serif; font-size: 0.7rem; cursor: pointer; transition: all 0.3s; }
+.toggle.active { background: rgba(0,255,170,0.15); border-color: rgba(0,255,170,0.3); color: #00ffaa; }
+.danger-zone { margin-top: 1rem; border-color: rgba(255,0,0,0.1); }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.screen.active { animation: fadeIn 0.3s ease-out; }
+@media(max-height:700px) { .game-title { font-size: 3rem; } .cal-visualizer { height: 140px; } .mode-icon { font-size: 2rem; } }
+@media(max-height:600px) { .login-tips { display: none; } .cal-instructions { display: none; } }
+
+
