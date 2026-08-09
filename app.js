@@ -4,6 +4,7 @@
 const state = {
     player: '',
     screen: 'login',
+    leaderboard: [],
     calibration: { active: false, capturing: false, samples: [], profile: null, captureStart: 0 },
     game: { active: false, mode: 'free', score: 0, bugs: 0, combo: 0, maxCombo: 0, lives: 3, startTime: null, endTime: null, lastZapTime: 0, comboTimer: null, timerInterval: null, bugTypes: {}, zaps: [], misses: 0, micActive: true, voiceListening: false },
     settings: { sensitivity: 5, sfx: true, haptic: true, voice: true, animIntensity: 'medium' },
@@ -331,4 +332,182 @@ function showResults() {
     const game = state.game, duration = (game.endTime - game.startTime) / 1000, accuracy = game.zaps.length > 0 ? 100 : 0;
     document.getElementById('result-score').textContent = game.score;
     document.getElementById('result-bugs').textContent = game.bugs;
-    document.getElementById('result-combo').textContent = game.m
+    document.getElementById('result-combo').textContent = game.maxCombo;
+    document.getElementById('result-accuracy').textContent = `${Math.round(accuracy)}%`;
+
+    const bugList = document.getElementById('bug-list');
+    const bugEntries = Object.entries(game.bugTypes);
+    bugList.innerHTML = bugEntries.length
+        ? bugEntries.map(([type, count]) => `<div class="bug-item"><span>${(BUG_TYPES[type] || BUG_TYPES.bug).emoji} ${(BUG_TYPES[type] || BUG_TYPES.bug).name}</span><span>${count}</span></div>`).join('')
+        : '<div class="bug-item empty">No calls captured</div>';
+
+    const rank = [...RANKS].reverse().find(r => game.score >= r.score) || RANKS[0];
+    const rankEl = document.getElementById('result-rank');
+    rankEl.innerHTML = `<span class="rank-title">${rank.title}</span>`;
+    rankEl.style.color = rank.color;
+}
+
+function triggerSplat(combo) {
+    const gameArea = document.querySelector('.game-area');
+    if (!gameArea) return;
+    const splat = document.createElement('div');
+    splat.className = 'splat';
+    const x = 15 + Math.random() * 70;
+    const y = 20 + Math.random() * 60;
+    splat.style.left = `${x}%`;
+    splat.style.top = `${y}%`;
+    splat.style.transform = `translate(-50%, -50%) scale(${1 + Math.min(combo, 6) * 0.08})`;
+    gameArea.appendChild(splat);
+    setTimeout(() => splat.remove(), 400);
+
+    state.screenShake = Math.min(20, 6 + combo * 2);
+    if (state.settings.animIntensity === 'low') state.screenShake *= 0.5;
+    if (state.settings.animIntensity === 'high') state.screenShake *= 1.2;
+    if (state.settings.animIntensity === 'extreme') state.screenShake *= 1.5;
+}
+
+function showAnnouncer(text) {
+    const el = document.getElementById('announcer');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 900);
+}
+
+function showComboPopup(text) {
+    const el = document.getElementById('combo-popup');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 500);
+}
+
+function toggleMic() {
+    state.game.micActive = !state.game.micActive;
+    const btn = document.getElementById('mic-toggle');
+    btn.classList.toggle('mic-on', state.game.micActive);
+    btn.classList.toggle('mic-off', !state.game.micActive);
+    btn.querySelector('.mic-status').textContent = state.game.micActive ? 'ON' : 'OFF';
+}
+
+function toggleVoice() {
+    state.settings.voice = !state.settings.voice;
+    saveData();
+    const btn = document.getElementById('voice-btn');
+    btn.classList.toggle('active', state.settings.voice);
+    if (!state.settings.voice && state.recognition && state.game.voiceListening) {
+        state.recognition.stop();
+        state.game.voiceListening = false;
+    }
+}
+
+function startVoiceListen() {
+    if (!state.settings.voice || !state.game.active || state.game.voiceListening) return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (!state.recognition) {
+        state.recognition = new SpeechRecognition();
+        state.recognition.lang = 'en-US';
+        state.recognition.continuous = false;
+        state.recognition.interimResults = false;
+        state.recognition.maxAlternatives = 1;
+
+        state.recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript.toLowerCase().trim();
+            const type = Object.keys(BUG_TYPES).find(b => transcript.includes(b)) || 'bug';
+            state.game.bugTypes[type] = (state.game.bugTypes[type] || 0) + 1;
+            const display = document.getElementById('bug-type-display');
+            display.textContent = `${BUG_TYPES[type].emoji} ${BUG_TYPES[type].name}!`;
+            display.classList.add('show');
+            setTimeout(() => display.classList.remove('show'), 900);
+        };
+        state.recognition.onerror = () => { };
+        state.recognition.onend = () => {
+            state.game.voiceListening = false;
+            hideVoiceHint();
+        };
+    }
+
+    state.game.voiceListening = true;
+    try {
+        state.recognition.start();
+    } catch {
+        state.game.voiceListening = false;
+    }
+}
+
+function showVoiceHint() {
+    const hint = document.getElementById('voice-hint');
+    if (!hint || !state.settings.voice) return;
+    hint.classList.add('show');
+    setTimeout(() => hideVoiceHint(), 1500);
+}
+
+function hideVoiceHint() {
+    const hint = document.getElementById('voice-hint');
+    if (hint) hint.classList.remove('show');
+}
+
+function showLeaderboard() {
+    showScreen('leaderboard');
+    renderLeaderboard(document.querySelector('.lb-tab.active')?.dataset.tab || 'all');
+}
+
+function renderLeaderboard(tab = 'all') {
+    const list = document.getElementById('lb-list');
+    if (!list) return;
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+
+    let entries = [...state.leaderboard];
+    if (tab === 'today') entries = entries.filter(e => (e.date || '').slice(0, 10) === today);
+    if (tab === 'mode') entries = entries.filter(e => e.mode === state.game.mode);
+
+    entries = entries.sort((a, b) => b.score - a.score).slice(0, 25);
+    if (!entries.length) {
+        list.innerHTML = '<div class="lb-empty">No scores yet. Start zapping!</div>';
+        return;
+    }
+
+    list.innerHTML = entries.map((entry, idx) => {
+        const medalClass = idx === 0 ? 'gold' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : '';
+        return `<div class="lb-row">
+            <div class="lb-rank ${medalClass}">#${idx + 1}</div>
+            <div class="lb-info">
+                <div class="lb-name">${entry.player}</div>
+                <div class="lb-details">${entry.mode.toUpperCase()} • ${new Date(entry.date).toLocaleDateString()}</div>
+            </div>
+            <div class="lb-score">${entry.score}</div>
+        </div>`;
+    }).join('');
+}
+
+// ===== RENDER LOOP =====
+function gameLoop() {
+    if (state.screen === 'game' && state.game.active) drawAudioViz();
+    if (state.screen === 'calibration') drawCalViz();
+
+    if (state.screenShake > 0) {
+        const gameScreen = document.getElementById('game-screen');
+        if (gameScreen) {
+            const amount = state.screenShake;
+            const x = (Math.random() - 0.5) * amount;
+            const y = (Math.random() - 0.5) * amount;
+            gameScreen.style.transform = `translate(${x}px, ${y}px)`;
+        }
+        state.screenShake *= 0.85;
+        if (state.screenShake < 0.6) {
+            state.screenShake = 0;
+            const gameScreen = document.getElementById('game-screen');
+            if (gameScreen) gameScreen.style.transform = '';
+        }
+    }
+
+    state.animFrame = requestAnimationFrame(gameLoop);
+}
+
+window.addEventListener('resize', () => {
+    if (state.audio.vizCanvas) resizeCanvas(state.audio.vizCanvas);
+    if (state.audio.calCanvas) resizeCanvas(state.audio.calCanvas);
+});
