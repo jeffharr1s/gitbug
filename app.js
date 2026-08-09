@@ -6,7 +6,7 @@ const state = {
     player: '',
     screen: 'login',
     leaderboard: [],
-    calibration: { active: false, capturing: false, samples: [], profile: null, captureStart: 0, lastSampleTime: 0, wasQuiet: true },
+    calibration: { active: false, capturing: false, samples: [], profile: null, captureEndsAt: 0, peakFrame: null, peakLoudness: -1, wasQuiet: true },
     game: { active: false, mode: 'free', score: 0, bugs: 0, combo: 0, maxCombo: 0, lives: 3, startTime: null, endTime: null, lastZapTime: 0, comboTimer: null, timerInterval: null, bugTypes: {}, zaps: [], misses: 0, micActive: true, voiceListening: false, wasQuiet: true },
     settings: { sensitivity: 5, sfx: true, haptic: true, voice: true, animIntensity: 'medium' },
     audio: { context: null, analyser: null, microphone: null, dataArray: null, bufferLength: 0, source: null, vizCanvas: null, vizCtx: null, calCanvas: null, calCtx: null },
@@ -21,7 +21,8 @@ const state = {
 const COMBO_TIMEOUT = 2000;
 const ZAP_DEBOUNCE = 350;
 const CALIBRATION_SAMPLES = 5;
-const SAMPLE_DURATION = 400;
+const CAPTURE_WINDOW_MS = 1200;
+const MIC_CHECK_MS = 1800;
 const FREQUENCY_BINS = 64;
 
 const RANKS = [
@@ -89,6 +90,7 @@ function saveData() {
 function initUI() {
     document.getElementById('start-btn').addEventListener('click', onLogin);
     document.getElementById('player-name').addEventListener('keypress', (e) => { if (e.key === 'Enter') onLogin(); });
+    document.getElementById('cal-mic-check-btn').addEventListener('click', checkMic);
     document.getElementById('cal-start-btn').addEventListener('click', startCalibration);
     document.getElementById('cal-done-btn').addEventListener('click', finishCalibration);
     document.getElementById('cal-reset-btn').addEventListener('click', resetCalibrationUI);
@@ -202,12 +204,15 @@ function resetCalibrationUI() {
     state.calibration.active = false;
     state.calibration.capturing = false;
     state.calibration.samples = [];
-    state.calibration.lastSampleTime = 0;
-    state.calibration.wasQuiet = true;
-    document.getElementById('cal-start-btn').classList.remove('hidden');
+    state.calibration.peakFrame = null;
+    state.calibration.peakLoudness = -1;
+    document.getElementById('cal-mic-check-btn').disabled = false;
+    const startBtn = document.getElementById('cal-start-btn');
+    startBtn.textContent = 'CAPTURE SAMPLE 1';
+    startBtn.classList.remove('hidden');
     document.getElementById('cal-done-btn').classList.add('hidden');
     document.getElementById('cal-reset-btn').classList.add('hidden');
-    document.getElementById('cal-status').textContent = 'Tap START to begin';
+    document.getElementById('cal-status').textContent = 'Tap "Check Mic" first, then capture samples';
     document.getElementById('cal-status').style.color = '';
     document.getElementById('cal-count').textContent = `0/${CALIBRATION_SAMPLES} samples`;
     document.querySelectorAll('.sample-slot').forEach(s => s.classList.remove('captured'));
@@ -216,56 +221,92 @@ function resetCalibrationUI() {
     profileEl.classList.remove('active');
 }
 
-async function startCalibration() {
+// lets the player confirm the mic actually picks up sound before trying to calibrate
+async function checkMic() {
     await initAudio();
-    state.calibration.active = true;
-    state.calibration.samples = [];
-    state.calibration.capturing = true;
-    state.calibration.lastSampleTime = 0;
-    state.calibration.wasQuiet = true;
-    document.getElementById('cal-start-btn').classList.add('hidden');
-    document.getElementById('cal-done-btn').classList.remove('hidden');
-    document.getElementById('cal-reset-btn').classList.remove('hidden');
-    document.getElementById('cal-status').textContent = 'LISTENING... ZAP NOW!';
-    document.getElementById('cal-status').style.color = '#ff0055';
-    document.querySelectorAll('.sample-slot').forEach(s => s.classList.remove('captured'));
-    calibrateLoop();
+    const btn = document.getElementById('cal-mic-check-btn');
+    btn.disabled = true;
+    document.getElementById('cal-status').textContent = 'Make some noise...';
+    document.getElementById('cal-status').style.color = '#00ccff';
+    let peak = 0;
+    const endsAt = Date.now() + MIC_CHECK_MS;
+    (function loop() {
+        const data = getAudioData();
+        if (data) { const p = analyzeAudio(data); if (p.max > peak) peak = p.max; }
+        if (Date.now() < endsAt) { requestAnimationFrame(loop); return; }
+        btn.disabled = false;
+        if (peak > 10) {
+            document.getElementById('cal-status').textContent = `✅ Mic is working! (peak ${peak.toFixed(0)})`;
+            document.getElementById('cal-status').style.color = '#00ffaa';
+        } else {
+            document.getElementById('cal-status').textContent = '⚠️ Barely heard anything — check mic permissions/volume';
+            document.getElementById('cal-status').style.color = '#ffcc00';
+        }
+    })();
 }
 
-function calibrateLoop() {
-    if (!state.calibration.active || !state.calibration.capturing) return;
+// arms a short recording window; whatever's loudest in it becomes the sample, no auto-detection guesswork
+async function startCalibration() {
+    if (state.calibration.capturing) return;
+    await initAudio();
+    state.calibration.active = true;
+    state.calibration.capturing = true;
+    state.calibration.captureEndsAt = Date.now() + CAPTURE_WINDOW_MS;
+    state.calibration.peakFrame = null;
+    state.calibration.peakLoudness = -1;
+    document.getElementById('cal-start-btn').classList.add('hidden');
+    document.getElementById('cal-status').textContent = 'ZAP NOW!';
+    document.getElementById('cal-status').style.color = '#ff0055';
+    captureWindowLoop();
+}
+
+function captureWindowLoop() {
+    if (!state.calibration.capturing) return;
     const data = getAudioData();
-    if (!data) { requestAnimationFrame(calibrateLoop); return; }
-    const profile = analyzeAudio(data);
-    const isZap = detectZapLike(data, profile);
-    const sinceLastSample = Date.now() - state.calibration.lastSampleTime;
-    // hysteresis: only reset "ready" once the sound drops well below the trigger level, so
-    // lingering ambient noise can't permanently block the next sample, but sustained noise can't refill instantly
-    const zapThreshold = 30 + (10 - state.settings.sensitivity) * 3;
-    const isQuiet = profile.max < zapThreshold * 0.5 && profile.avg < 5;
-    const isOnset = isZap && state.calibration.wasQuiet;
-    if (isQuiet) state.calibration.wasQuiet = true; else if (isZap) state.calibration.wasQuiet = false;
-    if (isOnset && sinceLastSample > SAMPLE_DURATION && state.calibration.samples.length < CALIBRATION_SAMPLES) {
-        state.calibration.lastSampleTime = Date.now();
-        const sample = captureSample(data);
+    if (data) {
+        const profile = analyzeAudio(data);
+        const loudness = profile.max + profile.avg;
+        if (loudness > state.calibration.peakLoudness) {
+            state.calibration.peakLoudness = loudness;
+            state.calibration.peakFrame = captureSample(data);
+        }
+    }
+    if (Date.now() >= state.calibration.captureEndsAt) { finishCaptureWindow(); return; }
+    requestAnimationFrame(captureWindowLoop);
+}
+
+function finishCaptureWindow() {
+    state.calibration.capturing = false;
+    const sample = state.calibration.peakFrame;
+    const startBtn = document.getElementById('cal-start-btn');
+    if (sample && state.calibration.peakLoudness > 8) {
         state.calibration.samples.push(sample);
-        const slot = document.querySelector(`.sample-slot[data-index="${state.calibration.samples.length - 1}"]`);
+        const idx = state.calibration.samples.length - 1;
+        const slot = document.querySelector(`.sample-slot[data-index="${idx}"]`);
         if (slot) slot.classList.add('captured');
         document.getElementById('cal-count').textContent = `${state.calibration.samples.length}/${CALIBRATION_SAMPLES}`;
         if (state.settings.haptic && navigator.vibrate) navigator.vibrate(50);
-        if (state.calibration.samples.length >= CALIBRATION_SAMPLES) {
-            state.calibration.capturing = false;
-            buildCalibrationProfile();
-            document.getElementById('cal-status').textContent = 'PROFILE BUILT!';
-            document.getElementById('cal-status').style.color = '#00ffaa';
-            document.getElementById('cal-count').textContent = 'READY';
-        }
+        document.getElementById('cal-status').textContent = `✅ Got it! Peak ${sample.max.toFixed(0)}`;
+        document.getElementById('cal-status').style.color = '#00ffaa';
+    } else {
+        document.getElementById('cal-status').textContent = "❌ Didn't hear anything — try again, louder/closer";
+        document.getElementById('cal-status').style.color = '#ffcc00';
     }
-    requestAnimationFrame(calibrateLoop);
+    if (state.calibration.samples.length >= CALIBRATION_SAMPLES) {
+        buildCalibrationProfile();
+        document.getElementById('cal-status').textContent = 'PROFILE BUILT!';
+        document.getElementById('cal-status').style.color = '#00ffaa';
+        document.getElementById('cal-count').textContent = 'READY';
+        startBtn.classList.add('hidden');
+        document.getElementById('cal-done-btn').classList.remove('hidden');
+    } else {
+        startBtn.textContent = `CAPTURE SAMPLE ${state.calibration.samples.length + 1}`;
+        startBtn.classList.remove('hidden');
+    }
+    document.getElementById('cal-reset-btn').classList.remove('hidden');
 }
 
 function analyzeAudio(data) { let sum = 0, max = 0, maxIndex = 0; for (let i = 0; i < data.length; i++) { sum += data[i]; if (data[i] > max) { max = data[i]; maxIndex = i; } } return { avg: sum / data.length, max, maxIndex }; }
-function detectZapLike(data, profile) { const threshold = 30 + (10 - state.settings.sensitivity) * 3; return profile.max > threshold && profile.avg > 10; }
 function captureSample(data) { const bins = 32, step = Math.floor(data.length / bins), sample = []; for (let i = 0; i < bins; i++) sample.push(data[i * step]); return { fingerprint: sample, max: Math.max(...sample), avg: sample.reduce((a, b) => a + b, 0) / sample.length }; }
 
 function buildCalibrationProfile() {
@@ -287,13 +328,17 @@ function skipCalibration() { state.calibration.active = false; state.calibration
 function isZapDetected() {
     if (!state.audio.analyser || !state.calibration.profile || !state.game.micActive) return false;
     const data = getAudioData(); if (!data) return false;
-    const rawProfile = analyzeAudio(data);
-    // same simple loudness check calibration uses, so a zap that registers during calibration also registers in-game
-    const loud = detectZapLike(data, rawProfile);
-    const zapThreshold = 30 + (10 - state.settings.sensitivity) * 3;
+    const raw = analyzeAudio(data);
+    const profile = state.calibration.profile;
+    // thresholds are relative to what THIS device/mic actually recorded during calibration,
+    // instead of a hardcoded guess, so it adapts to whatever phone/laptop is being used
+    const sensitivityMultiplier = state.settings.sensitivity / 5;
+    const triggerLevel = Math.max(12, (profile.max * 0.5) / sensitivityMultiplier);
+    const quietLevel = triggerLevel * 0.45;
+    const loud = raw.max > triggerLevel && raw.avg > Math.max(4, profile.avg * 0.25);
+    const quiet = raw.max < quietLevel;
     // hysteresis: only reset "ready" once the sound drops well below the trigger level, so
     // lingering ambient noise can't permanently block detection, but sustained noise can't re-trigger either
-    const quiet = rawProfile.max < zapThreshold * 0.5 && rawProfile.avg < 5;
     const isOnset = loud && state.game.wasQuiet;
     if (quiet) state.game.wasQuiet = true; else if (loud) state.game.wasQuiet = false;
     const now = Date.now();
