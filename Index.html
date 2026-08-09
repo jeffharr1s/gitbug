@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Bug Ninja - Zap Counter</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <div id="login-screen" class="screen active">
+            <div class="login-bg"></div>
+            <div class="login-content">
+                <h1 class="game-title">
+                    <span class="title-bug">BUG</span>
+                    <span class="title-ninja">NINJA</span>
+                </h1>
+                <div class="sword-divider"></div>
+                <p class="tagline">Hear the Zap. Slay the Bug.</p>
+                <div class="login-form">
+                    <label>Enter Your Ninja Name</label>
+                    <input type="text" id="player-name" placeholder="Jeff" maxlength="12" autocomplete="off">
+                    <button id="start-btn" class="btn-primary">
+                        <span class="btn-text">ENTER DOJO</span>
+                        <span class="btn-shine"></span>
+                    </button>
+                </div>
+                <div class="login-tips">
+                    <p>🎤 Allow microphone access to detect zaps</p>
+                    <p>⚡ Zap bugs. Rack up points. Beat friends.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="calibration-screen" class="screen">
+            <div class="cal-bg"></div>
+            <div class="cal-content">
+                <h2 class="cal-title">CALIBRATE YOUR SWATTER</h2>
+                <p class="cal-subtitle">Let me learn your zap signature</p>
+                <div class="cal-visualizer">
+                    <canvas id="cal-waveform"></canvas>
+                    <div class="cal-overlay">
+                        <div id="cal-status" class="cal-status">Tap START to begin</div>
+                        <div id="cal-count" class="cal-count">0/5 samples</div>
+                    </div>
+                </div>
+                <div class="cal-samples" id="cal-samples">
+                    <div class="sample-slot" data-index="0"></div>
+                    <div class="sample-slot" data-index="1"></div>
+                    <div class="sample-slot" data-index="2"></div>
+                    <div class="sample-slot" data-index="3"></div>
+                    <div class="sample-slot" data-index="4"></div>
+                </div>
+                <div class="cal-instructions" id="cal-instructions">
+                    <p>1. Tap START</p>
+                    <p>2. Zap a few bugs (or tap your swatter)</p>
+                    <p>3. I'll capture the sound signature</p>
+                    <p>4. Tap DONE when ready</p>
+                </div>
+                <div class="cal-actions">
+                    <button id="cal-start-btn" class="btn-primary">START CALIBRATION</button>
+                    <button id="cal-done-btn" class="btn-primary hidden">DONE ✓</button>
+                    <button id="cal-skip-btn" class="btn-text-btn">Skip for now →</button>
+                </div>
+                <div class="cal-profile" id="cal-profile"></div>
+            </div>
+        </div>
+
+        <div id="menu-screen" class="screen">
+            <div class="menu-header">
+                <h2 class="menu-title">BUG NINJA</h2>
+                <div class="player-badge">
+                    <span class="ninja-icon">🥷</span>
+                    <span id="menu-player-name">Jeff</span>
+                </div>
+            </div>
+            <div class="menu-grid">
+                <button class="mode-card" data-mode="free">
+                    <div class="mode-icon">🎯</div>
+                    <h3>Free Play</h3>
+                    <p>Zap at your own pace</p>
+                </button>
+                <button class="mode-card" data-mode="time">
+                    <div class="mode-icon">⏱️</div>
+                    <h3>Time Attack</h3>
+                    <p>60 seconds. Max zaps.</p>
+                </button>
+                <button class="mode-card" data-mode="endurance">
+                    <div class="mode-icon">🔥</div>
+                    <h3>Endurance</h3>
+                    <p>Don't miss 3 times</p>
+                </button>
+                <button class="mode-card" data-mode="combo">
+                    <div class="mode-icon">⚡</div>
+                    <h3>Combo Ninja</h3>
+                    <p>Build multipliers</p>
+                </button>
+            </div>
+            <div class="menu-actions">
+                <button id="recalibrate-btn" class="btn-secondary">🎯 Recalibrate</button>
+                <button id="leaderboard-btn" class="btn-secondary">🏆 Leaderboard</button>
+                <button id="settings-btn" class="btn-secondary">⚙️ Settings</button>
+            </div>
+        </div>
+
+        <div id="game-screen" class="screen">
+            <div class="game-hud">
+                <div class="hud-left">
+                    <div class="hud-item">
+                        <span class="hud-label">SCORE</span>
+                        <span id="score-display" class="hud-value">0</span>
+                    </div>
+                    <div class="hud-item">
+                        <span class="hud-label">COMBO</span>
+                        <span id="combo-display" class="hud-value combo">×1</span>
+                    </div>
+                </div>
+                <div class="hud-center">
+                    <div id="timer-display" class="timer">--:--</div>
+                    <div id="mode-badge" class="mode-badge">FREE PLAY</div>
+                </div>
+                <div class="hud-right">
+                    <div class="hud-item">
+                        <span class="hud-label">BUGS</span>
+                        <span id="bug-count" class="hud-value">0</span>
+                    </div>
+                    <div class="hud-item">
+                        <span class="hud-label">LIVES</span>
+                        <span id="lives-display" class="hud-value">♥♥♥</span>
+                    </div>
+                </div>
+            </div>
+            <div class="game-area">
+                <canvas id="splat-canvas"></canvas>
+                <div id="announcer" class="announcer"></div>
+                <div id="bug-type-display" class="bug-type-display"></div>
+                <div id="voice-hint" class="voice-hint">Say bug type after zap!</div>
+                <div id="combo-popup" class="combo-popup"></div>
+            </div>
+            <div class="game-controls">
+                <button id="mic-toggle" class="control-btn mic-on">
+                    <span class="mic-icon">🎤</span>
+                    <span class="mic-status">ON</span>
+                </button>
+                <button id="voice-btn" class="control-btn">
+                    <span>🗣️</span>
+                    <span>VOICE</span>
+                </button>
+                <button id="end-game-btn" class="control-btn danger">
+                    <span>✕</span>
+                    <span>END</span>
+                </button>
+            </div>
+            <div class="audio-viz">
+                <canvas id="audio-viz-canvas"></canvas>
+            </div>
+        </div>
+
+        <div id="results-screen" class="screen">
+            <div class="results-bg"></div>
+            <div class="results-content">
+                <h2 id="result-title" class="result-title">MISSION COMPLETE</h2>
+                <div class="result-stats">
+                    <div class="stat-card">
+                        <span class="stat-value" id="result-score">0</span>
+                        <span class="stat-label">TOTAL SCORE</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="result-bugs">0</span>
+                        <span class="stat-label">BUGS ZAPPED</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="result-combo">0</span>
+                        <span class="stat-label">MAX COMBO</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="result-accuracy">0%</span>
+                        <span class="stat-label">ACCURACY</span>
+                    </div>
+                </div>
+                <div class="bug-breakdown" id="bug-breakdown">
+                    <h3>Bug Breakdown</h3>
+                    <div class="bug-list" id="bug-list"></div>
+                </div>
+                <div class="result-rank" id="result-rank">
+                    <span class="rank-title">Novice Hunter</span>
+                </div>
+                <div class="result-actions">
+                    <button id="play-again-btn" class="btn-primary">PLAY AGAIN</button>
+                    <button id="menu-return-btn" class="btn-secondary">MAIN MENU</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="leaderboard-screen" class="screen">
+            <div class="lb-header">
+                <button class="back-btn" data-target="menu-screen">←</button>
+                <h2>🏆 LEADERBOARD</h2>
+            </div>
+            <div class="lb-tabs">
+                <button class="lb-tab active" data-tab="all">All Time</button>
+                <button class="lb-tab" data-tab="today">Today</button>
+                <button class="lb-tab" data-tab="mode">By Mode</button>
+            </div>
+            <div class="lb-list" id="lb-list"></div>
+        </div>
+
+        <div id="settings-screen" class="screen">
+            <div class="settings-header">
+                <button class="back-btn" data-target="menu-screen">←</button>
+                <h2>⚙️ SETTINGS</h2>
+            </div>
+            <div class="settings-list">
+                <div class="setting-item">
+                    <label>Zap Sensitivity</label>
+                    <input type="range" id="sensitivity" min="1" max="10" value="5">
+                    <span id="sensitivity-val">5</span>
+                </div>
+                <div class="setting-item">
+                    <label>Sound Effects</label>
+                    <button class="toggle active" id="sfx-toggle">ON</button>
+                </div>
+                <div class="setting-item">
+                    <label>Haptic Feedback</label>
+                    <button class="toggle active" id="haptic-toggle">ON</button>
+                </div>
+                <div class="setting-item">
+                    <label>Voice Recognition</label>
+                    <button class="toggle active" id="voice-toggle">ON</button>
+                </div>
+                <div class="setting-item">
+                    <label>Animation Intensity</label>
+                    <select id="anim-intensity">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="extreme">EXTREME</option>
+                    </select>
+                </div>
+                <div class="setting-item danger-zone">
+                    <button id="clear-data-btn" class="btn-danger">Clear All Data</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
+
