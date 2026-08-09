@@ -91,9 +91,10 @@ function initUI() {
     document.getElementById('player-name').addEventListener('keypress', (e) => { if (e.key === 'Enter') onLogin(); });
     document.getElementById('cal-start-btn').addEventListener('click', startCalibration);
     document.getElementById('cal-done-btn').addEventListener('click', finishCalibration);
+    document.getElementById('cal-reset-btn').addEventListener('click', resetCalibrationUI);
     document.getElementById('cal-skip-btn').addEventListener('click', skipCalibration);
     document.querySelectorAll('.mode-card').forEach(card => card.addEventListener('click', () => startGame(card.dataset.mode)));
-    document.getElementById('recalibrate-btn').addEventListener('click', () => showScreen('calibration'));
+    document.getElementById('recalibrate-btn').addEventListener('click', () => { resetCalibrationUI(); showScreen('calibration'); });
     document.getElementById('leaderboard-btn').addEventListener('click', showLeaderboard);
     document.getElementById('settings-btn').addEventListener('click', () => showScreen('settings'));
     document.getElementById('mic-toggle').addEventListener('click', toggleMic);
@@ -197,6 +198,22 @@ function drawCalViz() {
 }
 
 // ===== CALIBRATION =====
+function resetCalibrationUI() {
+    state.calibration.active = false;
+    state.calibration.capturing = false;
+    state.calibration.samples = [];
+    document.getElementById('cal-start-btn').classList.remove('hidden');
+    document.getElementById('cal-done-btn').classList.add('hidden');
+    document.getElementById('cal-reset-btn').classList.add('hidden');
+    document.getElementById('cal-status').textContent = 'Tap START to begin';
+    document.getElementById('cal-status').style.color = '';
+    document.getElementById('cal-count').textContent = `0/${CALIBRATION_SAMPLES} samples`;
+    document.querySelectorAll('.sample-slot').forEach(s => s.classList.remove('captured'));
+    const profileEl = document.getElementById('cal-profile');
+    profileEl.innerHTML = '';
+    profileEl.classList.remove('active');
+}
+
 async function startCalibration() {
     await initAudio();
     state.calibration.active = true;
@@ -204,6 +221,7 @@ async function startCalibration() {
     state.calibration.capturing = true;
     document.getElementById('cal-start-btn').classList.add('hidden');
     document.getElementById('cal-done-btn').classList.remove('hidden');
+    document.getElementById('cal-reset-btn').classList.remove('hidden');
     document.getElementById('cal-status').textContent = 'LISTENING... ZAP NOW!';
     document.getElementById('cal-status').style.color = '#ff0055';
     document.querySelectorAll('.sample-slot').forEach(s => s.classList.remove('captured'));
