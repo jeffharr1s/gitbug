@@ -60,11 +60,15 @@ document.addEventListener('DOMContentLoaded', () => {
 function loadData() {
     const saved = localStorage.getItem('bugNinjaData');
     if (saved) {
-        const data = JSON.parse(saved);
-        state.player = data.player || '';
-        state.settings = { ...state.settings, ...data.settings };
-        state.leaderboard = data.leaderboard || [];
-        state.calibration.profile = data.calibrationProfile || null;
+        try {
+            const data = JSON.parse(saved);
+            state.player = data.player || '';
+            state.settings = { ...state.settings, ...data.settings };
+            state.leaderboard = data.leaderboard || [];
+            state.calibration.profile = data.calibrationProfile || null;
+        } catch {
+            localStorage.removeItem('bugNinjaData');
+        }
     }
     if (state.player) document.getElementById('player-name').value = state.player;
 }
@@ -288,7 +292,7 @@ async function startGame(mode) {
     listenForZaps();
 }
 
-function listenForZaps() { if (!state.game.active) return; if (isZapDetected()) onZapDetected(); requestAnimationFrame(listenForZaps); }
+function listenForZaps() { if (!state.game.active) return; if (isZapDetected()) onZapDetected(); }
 
 function onZapDetected() {
     const now = Date.now(); state.game.lastZapTime = now;
@@ -329,7 +333,9 @@ function endGame() {
 
 function showResults() {
     showScreen('results');
-    const game = state.game, duration = (game.endTime - game.startTime) / 1000, accuracy = game.zaps.length > 0 ? 100 : 0;
+    const game = state.game;
+    const attempts = game.zaps.length + game.misses;
+    const accuracy = attempts > 0 ? (game.zaps.length / attempts) * 100 : 0;
     document.getElementById('result-score').textContent = game.score;
     document.getElementById('result-bugs').textContent = game.bugs;
     document.getElementById('result-combo').textContent = game.maxCombo;
@@ -472,19 +478,33 @@ function renderLeaderboard(tab = 'all') {
 
     list.innerHTML = entries.map((entry, idx) => {
         const medalClass = idx === 0 ? 'gold' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : '';
+        const safePlayer = escapeHtml(entry.player || 'Unknown');
+        const safeMode = escapeHtml((entry.mode || 'free').toUpperCase());
+        const safeDate = escapeHtml(new Date(entry.date).toLocaleDateString());
+        const safeScore = escapeHtml(entry.score ?? 0);
         return `<div class="lb-row">
             <div class="lb-rank ${medalClass}">#${idx + 1}</div>
             <div class="lb-info">
-                <div class="lb-name">${entry.player}</div>
-                <div class="lb-details">${entry.mode.toUpperCase()} • ${new Date(entry.date).toLocaleDateString()}</div>
+                <div class="lb-name">${safePlayer}</div>
+                <div class="lb-details">${safeMode} • ${safeDate}</div>
             </div>
-            <div class="lb-score">${entry.score}</div>
+            <div class="lb-score">${safeScore}</div>
         </div>`;
     }).join('');
 }
 
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
 // ===== RENDER LOOP =====
 function gameLoop() {
+    if (state.game.active) listenForZaps();
     if (state.screen === 'game' && state.game.active) drawAudioViz();
     if (state.screen === 'calibration') drawCalViz();
 
