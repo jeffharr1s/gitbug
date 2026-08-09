@@ -1,4 +1,5 @@
 /* ===== BUG NINJA - MAIN APP ===== */
+const APP_VERSION = '1.1.0';
 
 // ===== STATE =====
 const state = {
@@ -54,6 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initUI();
     initAudioViz();
     initCalViz();
+    const versionEl = document.getElementById('app-version');
+    if (versionEl) versionEl.textContent = `v${APP_VERSION}`;
     requestAnimationFrame(gameLoop);
 });
 
