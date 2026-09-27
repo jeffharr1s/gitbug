@@ -733,7 +733,7 @@ html, body {
 .game-controls {
     display: flex;
     justify-content: center;
-    gap: 1rem;
+    gap: 0.5rem;
     padding: 0.75rem;
     background: rgba(0,0,0,0.8);
     border-top: 1px solid rgba(255,255,255,0.05);
@@ -765,6 +765,18 @@ html, body {
     border-color: #00ffaa;
     color: #00ffaa;
     box-shadow: 0 0 15px rgba(0,255,170,0.2);
+}
+
+.control-btn.tally-btn {
+    min-width: 88px;
+    border-color: #ffcc00;
+    color: #ffcc00;
+    background: rgba(255,204,0,0.1);
+}
+
+.control-btn.tally-btn span:first-child {
+    font-size: 1.5rem;
+    line-height: 1;
 }
 
 .control-btn.danger {

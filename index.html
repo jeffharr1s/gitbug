@@ -88,6 +88,11 @@
                     <h3>Free Play</h3>
                     <p>Zap at your own pace</p>
                 </button>
+                <button class="mode-card" data-mode="manual">
+                    <div class="mode-icon">📋</div>
+                    <h3>Field Tally</h3>
+                    <p>Tap once per bug. No mic needed.</p>
+                </button>
                 <button class="mode-card" data-mode="time">
                     <div class="mode-icon">⏱️</div>
                     <h3>Time Attack</h3>
@@ -146,6 +151,10 @@
                 <div id="combo-popup" class="combo-popup"></div>
             </div>
             <div class="game-controls">
+                <button id="manual-tally-btn" class="control-btn tally-btn">
+                    <span>＋</span>
+                    <span>TALLY</span>
+                </button>
                 <button id="mic-toggle" class="control-btn mic-on">
                     <span class="mic-icon">🎤</span>
                     <span class="mic-status">ON</span>
@@ -202,7 +211,7 @@
 
         <div id="leaderboard-screen" class="screen">
             <div class="lb-header">
-                <button class="back-btn" data-target="menu-screen">←</button>
+                <button class="back-btn" data-target="menu">←</button>
                 <h2>🏆 LEADERBOARD</h2>
             </div>
             <div class="lb-tabs">
@@ -215,7 +224,7 @@
 
         <div id="settings-screen" class="screen">
             <div class="settings-header">
-                <button class="back-btn" data-target="menu-screen">←</button>
+                <button class="back-btn" data-target="menu">←</button>
                 <h2>⚙️ SETTINGS</h2>
             </div>
             <div class="settings-list">

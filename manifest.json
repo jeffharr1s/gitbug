@@ -3,6 +3,7 @@
   "short_name": "Bug Ninja",
   "description": "Hear the Zap. Slay the Bug.",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",

@@ -1,5 +1,5 @@
 /* ===== BUG NINJA - MAIN APP ===== */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 // ===== STATE =====
 const state = {
@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initUI();
     initAudioViz();
     initCalViz();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
     const versionEl = document.getElementById('app-version');
     if (versionEl) versionEl.textContent = `v${APP_VERSION}`;
     requestAnimationFrame(gameLoop);
@@ -100,6 +101,10 @@ function initUI() {
     document.getElementById('leaderboard-btn').addEventListener('click', showLeaderboard);
     document.getElementById('settings-btn').addEventListener('click', () => showScreen('settings'));
     document.getElementById('mic-toggle').addEventListener('click', toggleMic);
+    document.getElementById('manual-tally-btn').addEventListener('click', () => {
+        if (state.game.micActive) toggleMic();
+        onZapDetected(true);
+    });
     document.getElementById('voice-btn').addEventListener('click', toggleVoice);
     document.getElementById('end-game-btn').addEventListener('click', endGame);
     document.getElementById('play-again-btn').addEventListener('click', () => startGame(state.game.mode));
@@ -347,8 +352,9 @@ function isZapDetected() {
 
 // ===== GAME =====
 async function startGame(mode) {
-    await initAudio();
-    state.game = { active: true, mode: mode, score: 0, bugs: 0, combo: 0, maxCombo: 0, lives: mode === 'endurance' ? 3 : 99, startTime: Date.now(), endTime: null, lastZapTime: 0, comboTimer: null, timerInterval: null, bugTypes: {}, zaps: [], misses: 0, micActive: true, voiceListening: false, wasQuiet: true };
+    if (mode !== 'manual') await initAudio();
+    state.game = { active: true, mode: mode, score: 0, bugs: 0, combo: 0, maxCombo: 0, lives: mode === 'endurance' ? 3 : 99, startTime: Date.now(), endTime: null, lastZapTime: 0, comboTimer: null, timerInterval: null, bugTypes: {}, zaps: [], misses: 0, micActive: mode !== 'manual', voiceListening: false, wasQuiet: true };
+    updateMicUI();
     showScreen('game');
     updateHUD();
     document.getElementById('mode-badge').textContent = mode.toUpperCase().replace('-', ' ');
@@ -372,7 +378,7 @@ async function startGame(mode) {
 
 function listenForZaps() { if (!state.game.active) return; if (isZapDetected()) onZapDetected(); }
 
-function onZapDetected() {
+function onZapDetected(manual = false) {
     const now = Date.now(); state.game.lastZapTime = now;
     const timeSinceLast = now - (state.game.zaps.length > 0 ? state.game.zaps[state.game.zaps.length - 1].time : 0);
     if (timeSinceLast < COMBO_TIMEOUT && state.game.zaps.length > 0) state.game.combo++; else state.game.combo = 1;
@@ -387,7 +393,7 @@ function onZapDetected() {
     const announceKey = Object.keys(COMBO_ANNOUNCEMENTS).map(Number).filter(k => state.game.combo >= k).pop();
     if (announceKey) showAnnouncer(COMBO_ANNOUNCEMENTS[announceKey]);
     if (state.game.combo >= 2) showComboPopup(`×${state.game.combo}`);
-    if (state.settings.voice && state.game.combo <= 1) { showVoiceHint(); startVoiceListen(); }
+    if (!manual && state.settings.voice && state.game.combo <= 1) { showVoiceHint(); startVoiceListen(); }
     updateHUD();
 }
 
@@ -468,6 +474,10 @@ function showComboPopup(text) {
 
 function toggleMic() {
     state.game.micActive = !state.game.micActive;
+    updateMicUI();
+}
+
+function updateMicUI() {
     const btn = document.getElementById('mic-toggle');
     btn.classList.toggle('mic-on', state.game.micActive);
     btn.classList.toggle('mic-off', !state.game.micActive);
@@ -560,11 +570,12 @@ function renderLeaderboard(tab = 'all') {
         const safeMode = escapeHtml((entry.mode || 'free').toUpperCase());
         const safeDate = escapeHtml(new Date(entry.date).toLocaleDateString());
         const safeScore = escapeHtml(entry.score ?? 0);
+        const safeBugs = escapeHtml(entry.bugs ?? 0);
         return `<div class="lb-row">
             <div class="lb-rank ${medalClass}">#${idx + 1}</div>
             <div class="lb-info">
                 <div class="lb-name">${safePlayer}</div>
-                <div class="lb-details">${safeMode} • ${safeDate}</div>
+                <div class="lb-details">${safeBugs} bugs • ${safeMode} • ${safeDate}</div>
             </div>
             <div class="lb-score">${safeScore}</div>
         </div>`;
