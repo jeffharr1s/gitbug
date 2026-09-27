@@ -6,7 +6,7 @@ Bug Ninja is a browser-based bug tally and sound-triggered zap counter. Version 
 
 Open [Bug Ninja](https://jeffharr1s.github.io/gitbug/) in Chrome on Android while online. From Chrome's menu, choose **Install app** or **Add to Home screen**. The app needs to be opened online once so its files can be cached for offline use. Installation requires the HTTPS site; opening the project files directly from disk does not enable installation or microphone access.
 
-Bug counts, settings, and session history are stored in this browser on this device. They are not synced to an account or backed up to the cloud. Clearing the browser's site data can erase them.
+Bug counts, settings, and session history are stored in this browser on this device. You can open the app link from another device, but it will have separate data; counts are not synced or backed up to the cloud. Clearing the browser's site data can erase them.
 
 ## Field Tally
 
@@ -39,8 +39,13 @@ For a browser smoke test, open the HTTPS app on Android, start Field Tally, tap 
 
 ## Roadmap
 
-1. Add bug-type buttons to Field Tally and an all-time/day total summary.
-2. Add CSV or JSON export so field records can be backed up or shared.
-3. Finish the advertised game rules, especially misses/accuracy and Endurance mode.
-4. Improve install assets and test installation/offline behavior across Android devices.
-5. Consider optional cloud sync only if cross-device access is needed.
+1. Open directly into Field Tally for faster starts in the field.
+2. Add quick bug-type buttons, including an unknown/other option.
+3. Add Undo and +/- controls to correct missed or accidental taps.
+4. Add optional outing notes for location, weather, and field observations.
+5. Show outing duration and support pause/resume.
+6. Add summaries and trends by day, outing, and bug type.
+7. Export and back up records as CSV or JSON.
+8. Show offline readiness and app-update status.
+9. Add optional account-based cloud sync so session history can be shared across devices.
+10. Finish and test the other game modes, including Endurance lives, misses, accuracy, and distinct Combo rules.
